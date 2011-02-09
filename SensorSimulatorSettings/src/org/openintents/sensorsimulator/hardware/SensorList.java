@@ -37,21 +37,7 @@ import android.content.Context;
  * @author Josip Balic
  */
 
-public class Sensor extends Object {
-	
-	public static final int TYPE_ACCELEROMETER = 1;
-	public static final int TYPE_ALL = -1;
-	public static final int TYPE_GYROSCOPE = 4;
-	public static final int TYPE_LIGHT = 5;
-	public static final int TYPE_MAGNETIC_FIELD = 2;
-	public static final int TYPE_ORIENTATION = 3;
-	public static final int TYPE_PRESSURE = 6;
-	public static final int TYPE_PROXIMITY = 8;
-	public static final int TYPE_TEMPERATURE = 7; 
-	public static final int TYPE_BARCODE_READER = 9;
-	
-	public int sensorToRegister = 0;
-	public int sensorToRemove = 0;
+public class SensorList extends Object {
 
 	private ArrayList<Integer> currentSensors = new ArrayList<Integer>();
 	/**
@@ -70,30 +56,9 @@ public class Sensor extends Object {
 	 * @param context, context of the application
 	 * @param type, integer number of sensor we want to register.
 	 */
-	protected Sensor(Context context, int type) {
+	protected SensorList(Context context) {
 		super();
 		mContext = context;
-		sensorToRegister = type;
-	}
-	
-	/**
-	 * This method adds integer number of sensor
-	 * we want to enable.
-	 * 
-	 * @param type, integer number of sensor to be enabled.
-	 */
-	protected void addSensor(int type){
-		sensorToRegister = type;
-	}
-	
-	/**
-	 * This method adds integer number of sensor we want
-	 * to remove.
-	 * 
-	 * @param type, integer number of sensor to be removed.
-	 */
-	protected void removeSensor(int type){
-		sensorToRemove = type;
 	}
 	
 	/**

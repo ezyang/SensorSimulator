@@ -23,6 +23,8 @@ package org.openintents.sensorsimulator.hardware;
 
 import java.util.ArrayList;
 
+import android.hardware.Sensor;
+
 /**
  * Convenience functions to extract sensor names from a sensor's integers,
  * and the other way round.
@@ -46,14 +48,13 @@ public class SensorNames {
 	public static final String TYPE_GYROSCOPE = "gyroscope";
 	public static final String TYPE_PROXIMITY = "proximity";
 	public static final String TYPE_PRESSURE = "pressure";
-	public static final String TYPE_BARCODE_READER = "barcode reader";
 	
 
 	/**
 	 * Number of current sensors in our program. In android's specification there are
-	 * 8 sensors, but we have added barcode reader, so the number is 9.
+	 * 8 sensors.
 	 */
-	public static final int SENSOR_MAX_BIT = 9;
+	public static final int SENSOR_MAX_BIT = 8;
 	
 	/**
 	 * Convert a sensor integer number into a sensor name.
@@ -79,8 +80,6 @@ public class SensorNames {
 			return SensorNames.TYPE_TEMPERATURE;
 		case Sensor.TYPE_PROXIMITY:
 			return SensorNames.TYPE_PROXIMITY;
-		case Sensor.TYPE_BARCODE_READER:
-			return SensorNames.TYPE_BARCODE_READER;
 		default:
 			return null;
 		}
@@ -109,8 +108,6 @@ public class SensorNames {
 			return Sensor.TYPE_PROXIMITY;
 		}else if(sensorName.equalsIgnoreCase(TYPE_TEMPERATURE)){
 			return Sensor.TYPE_TEMPERATURE;
-		}else if(sensorName.equalsIgnoreCase(TYPE_BARCODE_READER)){
-			return Sensor.TYPE_BARCODE_READER;
 		}else{
 			return 0;
 		}
@@ -174,7 +171,6 @@ public class SensorNames {
 		case Sensor.TYPE_TEMPERATURE:
 		case Sensor.TYPE_LIGHT:
 		case Sensor.TYPE_PROXIMITY:
-		case Sensor.TYPE_BARCODE_READER:	
 			return 1;
 		default:
 			return 0;

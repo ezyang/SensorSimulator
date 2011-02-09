@@ -24,17 +24,23 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import org.openintents.sensorsimulator.db.SensorSimulator;
 import org.openintents.sensorsimulator.db.SensorSimulatorConvenience;
 
 import android.content.Context;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.hardware.Sensor;
 import android.os.Handler;
 import android.os.Message;
 import android.os.SystemClock;
@@ -76,7 +82,6 @@ final class SensorSimulatorClient {
     
     private ArrayList<Listener> mListeners = new ArrayList<Listener>();
     
-    @SuppressWarnings("unused")
 	private SensorManagerSimulator mSensorManager;
 	
     /**
@@ -106,6 +111,11 @@ final class SensorSimulatorClient {
         // get Info from ContentProvider       
         String ipaddress = mSensorSimulatorConvenience.getPreference(SensorSimulator.KEY_IPADDRESS);
         String socket = mSensorSimulatorConvenience.getPreference(SensorSimulator.KEY_SOCKET);
+        
+        if (ipaddress.equals("")) {
+        	Log.i(TAG, "Skipping connection due to empty address");
+        	return;
+        }
         
         Log.i(TAG, "Connecting to " + ipaddress + " : " + socket);
         
@@ -177,13 +187,20 @@ final class SensorSimulatorClient {
 	 * 
 	 * @return sensors, ArrayList<Integer> of supported sensors.
 	 */
-	protected ArrayList<Integer> getSensors() {
-		Log.i(TAG, "getSensors");
+	protected List<Sensor> getSensorList(int type) {
+		Log.i(TAG, "getSensorList");
 		//Get String array of supported sensors from SensorSimulator GUI.
 		String[] sensornames = getSupportedSensors();
-		//Convert that array to ArrayList of integers.
-		ArrayList<Integer> sensors = SensorNames.getSensorsFromNames(sensornames);
-		return sensors;
+		//Get the string of the type requested
+		String sensor = SensorNames.getSensorName(type);
+		for (String s : sensornames) {
+			if (s.equals(sensor)) {
+				ArrayList<Sensor> r = new ArrayList<Sensor>(1);
+				r.set(0, mSensorManager.getDefaultSensor(type));
+				return r;
+			}
+		}
+		return new ArrayList<Sensor>(0);
 	}
 		
 	/** Delay in milliseconds */
@@ -202,7 +219,7 @@ final class SensorSimulatorClient {
 	 * @param rate, integer rate of updates
 	 * @return boolean, true of false if registration was successful
 	 */
-	protected boolean registerListener(SensorEventListener listener, Sensor sensor, int rate) {
+	protected boolean registerListener(SensorList sensors, SensorEventListener listener, Sensor sensor, int rate) {
 
         int delay = -1;
         
@@ -252,8 +269,7 @@ final class SensorSimulatorClient {
                 if(result)
                 {
                     mListeners.add(l);                  
-                	sensor.addSensorToList(sensor.sensorToRegister);
-                	sensor.addSensor(0);
+                	sensors.addSensorToList(sensor.getType());
                 	mListeners.notify();
                 }
             } else
@@ -261,9 +277,8 @@ final class SensorSimulatorClient {
             	l = new Listener(listener, sensor, delay);
             	result = enableSensor(sensor, delay);
                 if(result) {
-                	l.addSensors(sensor, delay);
+                	l.addSensors(sensors, sensor, delay);
                 	mListeners.add(l);
-                	sensor.addSensor(0);
                 	mListeners.notify();
                 }
             }
@@ -278,7 +293,7 @@ final class SensorSimulatorClient {
 	 * @param listener, SensorEventListener of the sensor
 	 * @param sensor, Sensor we want to unregister
 	 */
-	protected void unregisterListener(SensorEventListener listener, Sensor sensor) {
+	protected void unregisterListener(SensorList sensors, SensorEventListener listener, Sensor sensor) {
 	    synchronized(mListeners)
         {
 	    	Iterator<Listener> itr = mListeners.iterator();
@@ -287,7 +302,7 @@ final class SensorSimulatorClient {
 
 	    		Listener element = itr.next();
 
-	    		if(element.hasSensor(sensor.sensorToRemove))
+	    		if(element.hasSensor(sensor.getType()))
 
                 {
 	    			//Line below is used to disable sensor 
@@ -301,8 +316,7 @@ final class SensorSimulatorClient {
                 		mListeners.remove(element);
                 		}
 
-                		sensor.removeSensorFromList(sensor.sensorToRemove);
-                		sensor.removeSensor(0);
+                		sensors.removeSensorFromList(sensor.getType());
                         break;
                 	}
                 }
@@ -318,13 +332,13 @@ final class SensorSimulatorClient {
 	 * @param listener, SensorEventListener of listener and it's sensors we want to 
 	 * unregister
 	 */
-	protected void unregisterListener(SensorEventListener listener) {
+	protected void unregisterListener(SensorList rsensors, SensorEventListener listener) {
 		
 		if(mListeners.size()!=0){
 
 			Iterator<Listener> itr = mListeners.iterator();
 			Sensor mSensor = itr.next().mSensor;
-			ArrayList<Integer> sensors = mSensor.getList();
+			ArrayList<Integer> sensors = rsensors.getList();
 
 			int[] sensor = new int[sensors.size()];
 			for(int i=0;i<sensors.size();i++){
@@ -334,8 +348,7 @@ final class SensorSimulatorClient {
 			}
 
 			for(int i=0;i<sensor.length;i++){
-				mSensor.removeSensor(sensor[i]);
-				unregisterListener(listener,mSensor);
+				unregisterListener(rsensors,listener,mSensor);
 			}
 		}
 
@@ -368,11 +381,10 @@ final class SensorSimulatorClient {
          * @param delay, integer that represents delay for this sensor
          * @return mSensors, Sensor object
          */
-        ArrayList<Integer> addSensors(Sensor sensor, int delay)
+        ArrayList<Integer> addSensors(SensorList sensors, Sensor sensor, int delay)
         {
-        	int sensors = sensor.sensorToRegister;
-        	sensor.addSensorToList(sensors);
-        	mSensors.add(sensors);
+        	sensors.addSensorToList(sensor.getType());
+        	mSensors.add(sensor.getType());
             if (delay < mDelay) {
             	mDelay = delay;
             	mNextUpdateTime = 0;
@@ -407,7 +419,7 @@ final class SensorSimulatorClient {
  
         	mSensorListener = listener;
         	mSensors = new ArrayList<Integer>();
-        	mSensors.add(sensor.sensorToRegister);
+        	mSensors.add(sensor.getType());
         	mDelay = delay;
         	mNextUpdateTime = 0;
         	mSensor = sensor;
@@ -428,13 +440,8 @@ final class SensorSimulatorClient {
     	String sensorString = null;
     	boolean result = false;
     	
-    	if(delay==-1){
-    		sensors.add(sensorAdd.sensorToRemove);
-    		sensornames = SensorNames.getSensorNames(sensors);
-    	}else{
-    		sensors.add(sensorAdd.sensorToRegister);
-    		sensornames = SensorNames.getSensorNames(sensors);
-    	}
+    	sensors.add(sensorAdd.getType());
+    	sensornames = SensorNames.getSensorNames(sensors);
     	
     	Iterator<String> iter = sensornames.iterator();
     	do{
@@ -514,16 +521,34 @@ final class SensorSimulatorClient {
             						readSensor(sensorbit, mValues[i], barcode);
             						mValuesCached[i] = true;
             					}
-            					//Check if input received is for barcode sensor or for other
-            					//sensor and create appropriate
-            					if(barcode!=null){
-            						SensorEvent event = new SensorEvent(mContext, barcode, sensorbit);
-            						barcode = null;
-            						l.mSensorListener.onSensorChanged(event);
-            					}else{
-            					SensorEvent event = new SensorEvent(mContext, mValues[i], sensorbit);
-            					l.mSensorListener.onSensorChanged(event);
-            					}
+            					// Oogly boogly
+								try {
+	            					Class<SensorEvent> c = android.hardware.SensorEvent.class;
+	            					Constructor<android.hardware.SensorEvent> constr = c.getDeclaredConstructor(int.class);
+	            					constr.setAccessible(true);
+	            					SensorEvent event = (SensorEvent)constr.newInstance(mValues[i].length);
+	            					System.arraycopy(mValues[i],0,event.values,0,mValues[i].length); 
+	            					event.sensor = mSensorManager.getDefaultSensor(sensorbit);
+	            					l.mSensorListener.onSensorChanged(event);
+								} catch (SecurityException e) {
+									e.printStackTrace();
+									throw new RuntimeException(e.toString());
+								} catch (NoSuchMethodException e) {
+									e.printStackTrace();
+									throw new RuntimeException(e.toString());
+								} catch (IllegalArgumentException e) {
+									e.printStackTrace();
+									throw new RuntimeException(e.toString());
+								} catch (InstantiationException e) {
+									e.printStackTrace();
+									throw new RuntimeException(e.toString());
+								} catch (IllegalAccessException e) {
+									e.printStackTrace();
+									throw new RuntimeException(e.toString());
+								} catch (InvocationTargetException e) {
+									e.printStackTrace();
+									throw new RuntimeException(e.toString());
+								}
             				}
             				
             				// switch to next sensor

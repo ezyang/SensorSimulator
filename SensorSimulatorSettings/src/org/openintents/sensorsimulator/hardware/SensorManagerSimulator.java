@@ -21,10 +21,15 @@
 
 package org.openintents.sensorsimulator.hardware;
 
-import java.util.ArrayList;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.util.List;
 
 import android.content.Context;
 import android.hardware.SensorManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEventListener;
 import android.os.Build;
 import android.widget.Toast;
 
@@ -61,7 +66,7 @@ public class SensorManagerSimulator {
 	public static final int SENSOR_DELAY_NORMAL = 3;
 	public static final int SENSOR_DELAY_UI = 2;
 	
-	private static Sensor sensors;
+	private static SensorList sensors;
 	
 	/**
 	 * Constructor.
@@ -76,6 +81,7 @@ public class SensorManagerSimulator {
 		mContext = context;
 		mSensorManager = systemsensormanager;
 		mClient = new SensorSimulatorClient(mContext, this);
+		sensors = new SensorList(context);
 	}
 
 	/**
@@ -121,13 +127,12 @@ public class SensorManagerSimulator {
 	 * 
 	 * @return available sensors as ArrayList<Integer>
 	 */
-	public ArrayList<Integer> getSensors() {
+	public List<Sensor> getSensorList(int type) {
 		if (mClient.connected) {
-			return mClient.getSensors();
+			return mClient.getSensorList(type);
 		} else {
 			if (mSensorManager != null) {
-				//return mSensorManager.getSensors();
-				return null;
+				return mSensorManager.getSensorList(type);
 			}
 			return null;
 		}
@@ -149,6 +154,8 @@ public class SensorManagerSimulator {
 		return true;
 	}
 	
+	// XXX No Handler support yet, sorry!
+	
 	/**
 	 * Registers a listener for given sensors.
 	 * 
@@ -161,14 +168,13 @@ public class SensorManagerSimulator {
 
 	public boolean registerListener(SensorEventListener listener, Sensor sensor, int rate) {
 		if (mClient.connected) {
-			mClient.registerListener(listener, sensor, rate);
+			mClient.registerListener(sensors, listener, sensor, rate);
 			return true;
 		} else {
 			if (mSensorManager == null) {
 				return false;
 			}
-			return false;
-			//return mSensorManager.registerListener(listener, sensor, rate);
+			return mSensorManager.registerListener(listener, mSensorManager.getDefaultSensor(sensor.getType()), rate);
 		}
 	}
 
@@ -182,10 +188,10 @@ public class SensorManagerSimulator {
 
 	public void unregisterListener(SensorEventListener listener, Sensor sensor) {
 		if (mClient.connected) {
-			mClient.unregisterListener(listener, sensor);
+			mClient.unregisterListener(sensors, listener, sensor);
 		} else {
 			if (mSensorManager == null) {
-				//mSensorManager.unregisterListener(listener, sensor);
+				mSensorManager.unregisterListener(listener, sensor);
 			}
 		}
 	}
@@ -198,10 +204,10 @@ public class SensorManagerSimulator {
 	
 	public void unregisterListener(SensorEventListener listener) {
 		if (mClient.connected) {
-			mClient.unregisterListener(listener);
+			mClient.unregisterListener(sensors, listener);
 		} else {
 			if (mSensorManager != null) {
-				//mSensorManager.unregisterListener(listener);
+				mSensorManager.unregisterListener(listener);
 			}
 		}
 	}
@@ -242,18 +248,61 @@ public class SensorManagerSimulator {
 	 * @param type, integer number of sensor to be registered or unregistered.
 	 * @return sensors, Sensor object that is used in our methods.
 	 */
-	public Sensor getDefaultSensor (int type){
-		if(sensors == null) {
-			sensors = new Sensor(mContext, type);
-			return sensors;			
-		}else if(sensors.checkList(type)){
-			sensors.addSensor(type);
-			return sensors;
-		}else{
-			sensors.removeSensor(type);
-			return sensors;
+	public Sensor getDefaultSensor (int type) {
+		// XXX currently, if we're connected, ALL sensors are overridden,
+		// even the ones the GUI doesn't support. This should be OK, because
+		// the usual use case is in an emulator.
+		if (!mClient.connected) {
+			return mSensorManager.getDefaultSensor(type);
 		}
-		
+		try {
+			Constructor<android.hardware.Sensor> constr =
+				android.hardware.Sensor.class.getDeclaredConstructor();
+			constr.setAccessible(true);
+			Sensor s = (Sensor) constr.newInstance();
+			setPrivateField(s, "mType", type);
+			setPrivateField(s, "mName", "Simulated sensor");
+			setPrivateField(s, "mVendor", "OpenIntents SensorSimulator");
+			return s;
+		} catch (SecurityException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (NoSuchMethodException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (IllegalArgumentException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (InstantiationException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (InvocationTargetException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		}
+	}
+	
+	static private void setPrivateField(Object o, String field, Object value) {
+		try {
+			Field f = o.getClass().getDeclaredField(field);
+			f.setAccessible(true);
+			f.set(o, value);
+		} catch (SecurityException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (NoSuchFieldException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (IllegalArgumentException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		} catch (IllegalAccessException e) {
+			e.printStackTrace();
+			throw new RuntimeException(e.toString());
+		}
 	}
 
 }
